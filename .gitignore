@@ -43,6 +43,9 @@ docs/.vitepress/cache/
 reframe/
 
 # Misc
-openwolf-icon.zip
-openwolf-blueprint.md
-openwolf-readme-prompt.md
+*.md
+!README.md
+!CODE_OF_CONDUCT.md
+!CONTRIBUTING.md
+
+

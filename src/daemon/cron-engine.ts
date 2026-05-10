@@ -6,6 +6,8 @@ import { readJSON, writeJSON, readText, writeText, appendText } from "../utils/f
 import { scanProject } from "../scanner/anatomy-scanner.js";
 import { detectWaste } from "../tracker/waste-detector.js";
 import type { Logger } from "../utils/logger.js";
+import type { IProviderAdapter, ProviderRequest } from "@openwolf/interfaces";
+import { AnthropicProvider } from "../../providers/anthropic/index.js";
 
 interface CronAction {
   type: string;
@@ -51,6 +53,7 @@ export class CronEngine {
   private broadcast: (msg: unknown) => void;
   private scheduledTasks: cron.ScheduledTask[] = [];
   private failureCounts = new Map<string, number>();
+  private provider!: IProviderAdapter;
 
   constructor(
     wolfDir: string,
@@ -306,10 +309,6 @@ export class CronEngine {
   }
 
   private async runAiTask(params: { prompt: string; context_files: string[] }): Promise<void> {
-    if (!this.hasClaude()) {
-      throw new Error("Claude CLI not found. Install it from https://claude.ai/download or add it to PATH.");
-    }
-
     const contextParts: string[] = [];
     for (const file of params.context_files) {
       const filePath = path.join(this.projectRoot, file);
@@ -320,40 +319,55 @@ export class CronEngine {
       }
     }
 
-    const fullPrompt = `${params.prompt}\n\n---\nContext:\n${contextParts.join("\n\n")}`;
+    const request: ProviderRequest = {
+      prompt: params.prompt,
+      context: contextParts,
+      maxTokens: 4096,
+    };
 
     try {
-      // Use spawnSync to pipe prompt via stdin — avoids command-line length limits on Windows
-      // claude -p (no argument) reads prompt from stdin
-      // Strip ANTHROPIC_API_KEY so claude uses OAuth subscription credentials
-      // instead of a potentially depleted API key
-      const env = { ...process.env };
-      delete env.ANTHROPIC_API_KEY;
+      let response;
+      try {
+        response = await this.provider.run(request);
+      } catch (providerErr) {
+        // Fallback to Claude CLI if provider fails
+        if (this.hasClaude()) {
+          this.logger.warn(`Provider failed, falling back to Claude CLI: ${providerErr instanceof Error ? providerErr.message : String(providerErr)}`);
 
-      const proc = spawnSync("claude -p --output-format text", {
-        input: fullPrompt,
-        timeout: 120000,
-        encoding: "utf-8",
-        cwd: this.projectRoot,
-        env,
-        stdio: ["pipe", "pipe", "pipe"],
-        // shell: true needed on Windows so that claude.cmd is resolved
-        shell: true,
-        windowsHide: true,
-      });
+          const fullPrompt = `${params.prompt}\n\n---\nContext:\n${contextParts.join("\n\n")}`;
 
-      if (proc.error) {
-        throw proc.error;
+          const env = { ...process.env };
+          delete env.ANTHROPIC_API_KEY;
+
+          const proc = spawnSync("claude -p --output-format text", {
+            input: fullPrompt,
+            timeout: 120000,
+            encoding: "utf-8",
+            cwd: this.projectRoot,
+            env,
+            stdio: ["pipe", "pipe", "pipe"],
+            shell: true,
+            windowsHide: true,
+          });
+
+          if (proc.error) throw proc.error;
+          if (proc.status !== 0) {
+            const stderr = proc.stderr?.trim();
+            const stdout = proc.stdout?.trim();
+            throw new Error(`Exit code ${proc.status}: ${stderr || stdout || "Unknown error"}`);
+          }
+
+          response = {
+            content: (proc.stdout || "").replace(/\r\n/g, "\n").trim(),
+            tokensUsed: 0,
+            model: "claude-cli",
+          };
+        } else {
+          throw providerErr;
+        }
       }
 
-      if (proc.status !== 0) {
-        const stderr = proc.stderr?.trim();
-        const stdout = proc.stdout?.trim();
-        const errMsg = stderr || stdout || "Unknown error";
-        throw new Error(`Exit code ${proc.status}: ${errMsg}`);
-      }
-
-      let result = (proc.stdout || "").replace(/\r\n/g, "\n").trim();
+      let result = response.content;
 
       // Strip markdown code fences if present (```markdown ... ``` or ```json ... ```)
       const fenceMatch = result.match(/```[\w]*\n([\s\S]*?)\n```/);
@@ -375,7 +389,7 @@ export class CronEngine {
         }
       }
     } catch (err) {
-      throw new Error(`claude -p failed: ${err instanceof Error ? err.message : String(err)}`);
+      throw new Error(`Provider run failed: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 }

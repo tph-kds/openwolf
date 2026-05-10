@@ -9,6 +9,8 @@ import { ensureDir } from "../utils/paths.js";
 import { isWindows } from "../utils/platform.js";
 import { registerProject } from "./registry.js";
 import { CommandCodeAdapter } from "../../adapters/commandcode/index.js";
+import { CodexAdapter } from "../../adapters/codex/index.js";
+import { GenericAdapter } from "../../adapters/generic/index.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -227,6 +229,30 @@ export async function initCommand(): Promise<void> {
     }
   }
 
+
+  // --- Codex adapter: if .codex/ exists ---
+  const codexDir = path.join(projectRoot, ".codex");
+  let codexDetected = false;
+  if (fs.existsSync(codexDir)) {
+    try {
+      const cxAdapter = new CodexAdapter();
+      await cxAdapter.install(projectRoot);
+      codexDetected = true;
+    } catch (e) {
+      console.log("  Codex CLI setup failed:", (e as Error).message);
+    }
+  }
+
+  // --- Generic adapter: always install (works with any agent) ---
+  let genericDetected = false;
+  try {
+    const genAdapter = new GenericAdapter();
+    await genAdapter.install(projectRoot);
+    genericDetected = true;
+  } catch (e) {
+    console.log("  Generic agent setup failed:", (e as Error).message);
+  }
+
   // --- Anatomy scan: only on fresh init ---
   let fileCount = 0;
   if (!isUpgrade) {
@@ -301,13 +327,28 @@ export async function initCommand(): Promise<void> {
     console.log(`  ✓ COMMANDCODE.md updated`);
   }
   console.log("");
+
+  if (codexDetected) {
+    console.log(`  ✓ Codex CLI configuration installed (.codex/openwolf.md, .codex/rules/openwolf.md)`);
+    console.log(`  ✓ CODEX.md updated`);
+  }
+  if (genericDetected) {
+    console.log(`  ✓ Generic agent configuration installed (.wolf/agent-prompt.md, .wolf/agent-rules.md)`);
+    console.log(`  ✓ OPENWOLF.md created for generic agents`);
+  }
+  console.log("");
   if (commandCodeDetected) {
     console.log("  You're ready. Command Code will use the OpenWolf agent automatically.");
+  } else if (codexDetected) {
+    console.log("  You're ready. Codex CLI will use the OpenWolf protocol automatically.");
+  } else if (genericDetected) {
+    console.log("  You're ready. Generic agent instructions are installed in .wolf/.");
   } else {
     console.log("  You're ready. Just use 'claude' as normal — OpenWolf is watching.");
   }
   console.log("");
 }
+
 
 // ─── Helpers ─────────────────────────────────────────────────
 
