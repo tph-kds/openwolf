@@ -8,6 +8,7 @@ import { readJSON, writeJSON, readText, writeText } from "../utils/fs-safe.js";
 import { ensureDir } from "../utils/paths.js";
 import { isWindows } from "../utils/platform.js";
 import { registerProject } from "./registry.js";
+import { CommandCodeAdapter } from "../../adapters/commandcode/index.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -213,6 +214,19 @@ export async function initCommand(): Promise<void> {
     writeText(claudeMdPath, snippetContent);
   }
 
+  // --- Command Code agent: if .commandcode/ exists ---
+  const commandCodeDir = path.join(projectRoot, ".commandcode");
+  let commandCodeDetected = false;
+  if (fs.existsSync(commandCodeDir)) {
+    try {
+      const ccAdapter = new CommandCodeAdapter();
+      await ccAdapter.install(projectRoot);
+      commandCodeDetected = true;
+    } catch (e) {
+      console.log("  Command Code agent setup failed:", (e as Error).message);
+    }
+  }
+
   // --- Anatomy scan: only on fresh init ---
   let fileCount = 0;
   if (!isUpgrade) {
@@ -281,10 +295,17 @@ export async function initCommand(): Promise<void> {
     console.log(`  ✓ CLAUDE.md updated`);
     console.log(`  ✓ .claude/rules/openwolf.md created`);
     console.log(`  ✓ Anatomy scan: ${fileCount} files indexed`);
+  }
+  if (commandCodeDetected) {
+    console.log(`  ✓ Command Code agent + skill + rules registered (.commandcode/agents/openwolf.md, skills/openwolf/, rules/openwolf.md)`);
+    console.log(`  ✓ COMMANDCODE.md updated`);
   }
-  console.log(`  ✓ Daemon: ${daemonStatus}`);
   console.log("");
-  console.log("  You're ready. Just use 'claude' as normal — OpenWolf is watching.");
+  if (commandCodeDetected) {
+    console.log("  You're ready. Command Code will use the OpenWolf agent automatically.");
+  } else {
+    console.log("  You're ready. Just use 'claude' as normal — OpenWolf is watching.");
+  }
   console.log("");
 }
 

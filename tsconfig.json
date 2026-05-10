@@ -12,8 +12,21 @@
     "resolveJsonModule": true,
     "declaration": false,
     "declarationMap": false,
-    "sourceMap": true
+    "sourceMap": true,
+    "paths": {
+      "@openwolf/core/*": ["./core/*"],
+      "@openwolf/adapters/*": ["./adapters/*"],
+      "@openwolf/interfaces": ["./src/interfaces/index.ts"],
+      "@openwolf/interfaces/*": ["./src/interfaces/*"]
+    }
   },
-  "include": ["bin/**/*.ts", "src/**/*.ts"],
+  "include": [
+    "bin/**/*.ts",
+    "src/**/*.ts",
+    "core/**/*.ts",
+    "adapters/**/*.ts",
+    "storage/**/*.ts",
+    "providers/**/*.ts"
+  ],
   "exclude": ["node_modules", "dist", "src/dashboard/app"]
 }

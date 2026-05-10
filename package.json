@@ -67,9 +67,19 @@
     "claude-code",
     "developer-tools"
   ],
+  "imports": {
+    "@openwolf/core/*": "./core/*",
+    "@openwolf/adapters/*": "./adapters/*",
+    "@openwolf/interfaces": "./src/interfaces/index.js",
+    "@openwolf/interfaces/*": "./src/interfaces/*"
+  },
   "files": [
     "dist/",
     "src/templates/",
+    "core/",
+    "adapters/",
+    "storage/",
+    "providers/",
     "LICENSE",
     "README.md"
   ]

@@ -35,6 +35,10 @@ docs/.vitepress/cache/
 # OpenWolf runtime (project-specific)
 .wolf/
 
+# commandcode
+.commandcode
+.update
+
 # Reference material (not needed in repo)
 reframe/
 
